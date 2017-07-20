@@ -1,4 +1,5 @@
 #!/usr/bin/python
+# -*- coding:utf-8 -*-
 import random
 import time
 import numpy as np
@@ -11,6 +12,44 @@ __date__ = 'Feb 22, 2017'
 #Boltzmann constant (eV/K)
 kB = 8.6173303E-5
 
+class Square(object):
+    def __init__(self, len=1,x_begin=0,y_begin=0):
+        """
+           格子,length正方形的边长，
+          x_begin,y_begin 表示 这个正方式的起始坐标，有了超始坐标
+         与边长， 就可确定这个正方形覆盖的位置
+        """
+        self.len=len
+        self.x_begin=x_begin
+        self.y_begin=y_begin
+    def is_covered(x,y):         # 判断x y 这个点 是否在Square 范围内
+        for pos in self.get_pos_list():
+            if pos[0]==x and pos[1]==y:
+                return True
+        return False
+
+    def get_x_begin(self):
+        return self.x_begin
+    def get_y_begin(self):
+        return self.y_begin
+    def set_x_begin(self,x):
+        self.x_begin=x
+    def set_y_begin(self,y):
+        self.y_begin=y
+    def get_x_end(self):
+        return self.x+self.len
+    def get_y_end(self):
+        return self.y+self.len
+    def get_pos_list(self):
+        "返回4个位置"
+        posList=[]
+        for x in range(len):
+            for y in range(len):
+                posList.append([x_begin+x,y_begin+y])
+        return posList
+
+
+
 class BinaryMC(object):
     """
     A class to simulation the formation of binary thin film on a substrate
@@ -21,10 +60,11 @@ class BinaryMC(object):
         Initialize the simulation.
         """
         self.param = param
-        self.ngrid = ngrid
-        self.nblocks = nblocks
+        self.ngrid = ngrid      # 整个区域边长+1 (因0based)
+        self.nblocks = nblocks  # 需要红蓝格子的总数
         self.ratio = BAratio
-        self.ground, self.blocs = self.get_start()
+        self.get_start()
+                
 
     def get_start(self):
         """
@@ -33,32 +73,174 @@ class BinaryMC(object):
         nblocks = self.nblocks
         ngrid = self.ngrid
         ratio = self.ratio
-
-        ground = np.zeros(shape=(ngrid/2,ngrid))
-        nsqrt = int(np.ceil(np.sqrt(nblocks)))
-        nmod = nblocks%nsqrt
+        self.ground=np.zeros(shape=(ngrid/2,ngrid))
+        # nsqrt = int(np.ceil(np.sqrt(nblocks)))
+        # nmod = nblocks%nsqrt
+        # print("nblocks,nsqrt,nmod,nblocks/nsqrt",nblocks,nsqrt,nmod,nblocks/nsqrt)
+        self.xmiddle=ngrid/2
+        self.ymiddle=0  #初始时， 尽量让各个格子围着（xmiddle,ymiddle） 这一点，寻找离这个点最近的点来放置下一个格子，
         
-        blocs = []
-        for i in range(nblocks/nsqrt):
-            for j in range((ngrid-nsqrt)/2,(ngrid+nsqrt)/2):
-                if random.uniform(0,1) > ratio:
-                    ground[i,j]= 1
+
+        self.blocs = []
+        for i in range(nblocks):
+            if random.uniform(0,1) > ratio:
+                square=Square(1,x_begin,y_begin)
+                x_begin,y_begin=self.get_min_distance(square.len)
+                self.set_ground_by_pos(square,1)
+                self.blocs.append(square)
+            else:
+                square=Square(2,x_begin,y_begin)
+                x_begin,y_begin=self.get_min_distance(square.len)
+                self.set_ground_by_pos(square,-1)
+                self.blocs.append(square)
+
+    def get_min_distance(self,len): # len 为正方形的边长，
+        # (self.xmiddle,self.ymiddle)是一个点
+        # 这个函数为于寻找 ground中距离(self.xmiddle,self.ymiddle)最近，且value值为0的位置，即此位置没有放置任何格子
+        # 且此位置足以容纳边长为len的正方形
+        # 以便于初始化的时候围绕着这个点排兵布阵
+        is_started=False
+        x_nearest=0
+        y_nearest=0
+        for y, arr1 in enumerate(self.ground):
+            for x, value in enumerate(arr1):
+                if value!=0:
+                    continue
+
+                is_enouth,x_begin,y_begin=self.is_enough_space_nearby(x,y,len)
+                if not is_enouth:
+                    continue
+
+
+                if is_started==False:
+                    is_started=True
+                    x_nearest=x_begin
+                    y_nearest=y_begin
                 else:
-                    ground[i,j]=-1
-                blocs.append([i,j])
-        if nmod != 0:
-            i = nblocks/nsqrt
-            for j in range((ngrid-nmod)/2,(ngrid+nmod)/2):
-                if random.uniform(0,1) > ratio:
-                    ground[i,j]= 1
-                else:
-                    ground[i,j]=-1
-                blocs.append([i,j])
-        return ground, blocs
+                    if self.get_distance(x_begin,y_begin,self.xmiddle,self.ymiddle)<self.get_distance(x_nearest,y_nearest,self.xmiddle,self.ymiddle):
+                        x_nearest=x_begin
+                        y_nearest=y_begin
+                    elif self.get_distance(x_begin,y_begin,self.xmiddle,self.ymiddle)==self.get_distance(x_nearest,y_nearest,self.xmiddle,self.ymiddle):
+                        # 如果两个点距离相等，则选y值小的那一个，即，尽量让水滴 底粗头细,优先在底部放置格子
+                        if y<y_nearest:
+                            x_nearest=x_begin
+                            y_nearest=y_begin
+        return x_nearest,y_nearest
+    
+    def get_ground_y_len(self):
+        return len(self.ground)
+    def get_ground_x_len(self):
+        return len(self.ground[0])
+
+
+    def is_enough_space_nearby(self,x,y,len): # len =1 或2 
+        # 已知 (x,y) 为空格子，判断(x,y)附近是否为空，以足够容纳边长为len的正方形
+        # 并返回这个足够容纳这个正方形的起点坐标
+        if len==1:              # 边长为1时，直接返回这个点即可，因为忆知(x,y )为空格子
+            return True,x,y
+
+        # 以下为len=2的情形 ,如下图 判断 a bc 的位置是否同时为空格子
+        if x<=self.xmiddle: # 如果此点位于基点的左侧 (主要为了让选中的点离基点越近越好)
+            is_enough,x_begin,y_begin=self.is_enough_space_nearby_left_bottom(x,y)
+            if  is_enough: return  is_enough,x_begin,y_begin
+            is_enough,x_begin,y_begin=self.is_enough_space_nearby_left_top(x,y)
+            if  is_enough: return  is_enough,x_begin,y_begin
+            is_enough,x_begin,y_begin=self.is_enough_space_nearby_right_bottom(x,y)
+            if  is_enough: return  is_enough,x_begin,y_begin
+            is_enough,x_begin,y_begin=self.is_enough_space_nearby_right_top(x,y)
+            if  is_enough: return  is_enough,x_begin,y_begin
+        else:# 如果此点位于基点的左侧
+            is_enough,x_begin,y_begin=self.is_enough_space_nearby_right_bottom(x,y)
+            if  is_enough: return  is_enough,x_begin,y_begin
+            is_enough,x_begin,y_begin=self.is_enough_space_nearby_right_top(x,y)
+            if  is_enough: return  is_enough,x_begin,y_begin
+
+            is_enough,x_begin,y_begin=self.is_enough_space_nearby_left_bottom(x,y)
+            if  is_enough: return  is_enough,x_begin,y_begin
+            is_enough,x_begin,y_begin=self.is_enough_space_nearby_left_top(x,y)
+            if  is_enough: return  is_enough,x_begin,y_begin
+        return False,0,0
+    
+    def get_distance(self,x1,y1,x2,y2):#计算两点之间的距离的平方 (x1,y1),(x2,y2 ) 则 （x2-x1）^2+(y2-y1)^2
+        return (x1-x2)*(x1-x2)+(y1-y2)*(y1-y2)
+    def is_enough_space_nearby_left_bottom(self,x,y): #
+        # 以下为len=2的情形 ,如下图 判断 a bc 的位置是否同时为空格子
+        # 并返回起点的坐标(4个点中坐标最小的那个)
+        # |b    |c |
+        # |(x,y)| a|
+        b_is_empty=(y!=self.get_ground_y_len()-1 and self.ground[y+1][x]==0)
+        c_is_empty=(x!=self.get_ground_x_len()-1 and y!=self.get_ground_y_len()-1 and self.ground[y+1][x+1]==0)
+        a_is_empty=(x!=self.get_ground_x_len()-1 and self.ground[y][x+1]==0)
+        if a_is_empty and b_is_empty and c_is_empty:
+            return True,x,y       # (x,y)点的位置
+        return False,0,0
+    def is_enough_space_nearby_left_top(self,x,y): #
+        # 以下为len=2的情形 ,如下图 判断 a bc 的位置是否同时为空格子
+        # 并返回起点的坐标(4个点中坐标最小的那个)
+        # |(x,y)    |c |
+        # |b        | a|
+        b_is_empty=(y!=0 and self.ground[y-1][x]==0)
+        c_is_empty=(x!=self.get_ground_x_len()-1 and self.ground[y][x+1]==0)
+        a_is_empty=(y!=0  and x!=self.get_ground_x_len()-1  and self.ground[y-1][x+1]==0)
+        if a_is_empty and b_is_empty and c_is_empty:
+            return True,x,y-1       # b点的位置
+        return False,0,0
+    
+    def is_enough_space_nearby_right_top(self,x,y): #
+        # 以下为len=2的情形 ,如下图 判断 a bc 的位置是否同时为空格子
+        # 并返回起点的坐标(4个点中坐标最小的那个)
+        # |c        |(x,y) |
+        # |b        | a    |
+        a_is_empty=(y!=0 and self.ground[y-1][x]==0)
+        c_is_empty=(x!=0 and self.ground[y][x-1]==0)
+        b_is_empty=(y!=0 and x!=0 and self.ground[y-1][x-1]==0)
+        if a_is_empty and b_is_empty and c_is_empty:
+            return True,x-1,y-1       # b点的位置
+        return False,0,0
+    def is_enough_space_nearby_right_bottom(self,x,y): #
+        # 以下为len=2的情形 ,如下图 判断 a bc 的位置是否同时为空格子
+        # 并返回起点的坐标(4个点中坐标最小的那个)
+        # |c        |a         |
+        # |b        | (x,y)    |
+        a_is_empty=(y!=self.get_ground_y_len()-1 and self.ground[y+1][x]==0)
+        b_is_empty=(x!=0 and self.ground[y][x-1]==0)
+        c_is_empty=(x!=0 and y!=self.get_ground_y_len()-1 and self.ground[y+1][x-1]==0)
+        if a_is_empty and b_is_empty and c_is_empty:
+            return True,x-1,y       # b点的位置
+        return False,0,0
+
+    
+    def get_square_by_pos(self,x,y):
+         # 判断xy 对应的坐标是否有对应的square, 否则话return None
+        #  x,y 可以是大格子中4个点的任意一个点
+            for i, square in enumerate(self.blocs):
+                if square.is_covered(x,y):
+                    return square
+            return None
+
+    def set_ground_by_pos(self,square,value):
+        for dy in range(square.len):
+            for dx in range(square.len):
+                self.ground[square.y_begin+dy][square.x_begin+dx]=value
+
+    def random_direction(self): # 随机决定向4个文件哪个方便移动
+        return random.choice(["left","right","up","down"])
+    
+    # def move_left(self,nb):        # 向左移动， 移到头后从最右侧出现
+    #     square = self.blocs[nb]                      #get the location of the block
+    #     if square.len==1:                            # 如果是小格子
+
+
+
+
+
 
     def move(self):
         nb = random.randint(0,self.nblocks-1)      #select a block
-        y, x = self.blocs[nb]                      #get the location of the block
+        square = self.blocs[nb]                      #get the location of the block
+        x=square.get_x_begin()
+        y=square.get_y_begin()
+        # y, x = self.blocs[nb]                      #get the location of the block
         dx = random.choice([-1,0,0,1])             #select a direction along x
         if dx == 0:                                #select a direction along y
             dy = random.choice([-1,1])
@@ -104,6 +286,7 @@ class BinaryMC(object):
             return x+dx-self.ngrid
         else:
             return x+dx
+
 
 
     def bindingE(self,x,y):
@@ -166,14 +349,14 @@ class BinaryMC(object):
         Args:
             x, y (int): the current location of the block
             x1, y1 (int): the new location
-        
+
         Returns:
             Relative probability (float): at room temperature (300K), and
             the probability of the fatest movement is set as 1.
         """
         V = 0
         #diffusion
-        if self.ground[y1][x1]==0: 
+        if self.ground[y1][x1]==0:
             if self.ground[y][x]==1: # A-type block
                 #diffusion barrier
                 if y==0:
@@ -211,7 +394,7 @@ class BinaryMC(object):
 
     def plot(self,name='tmp.png'):
         plt.imshow(MC.ground,cmap='bwr',origin='uper')
-        plt.xticks([])
+        plt.xticks([ 1])
         plt.yticks([])
         plt.savefig(name)
 
@@ -235,5 +418,5 @@ param = {"EAA":0.12,   #A-A interaction
 
 start = time.time()
 MC = BinaryMC(param=param,ngrid=50,nblocks=70,BAratio=0.3)
-MC.simulate(nsteps=80000000,nfigs=10)
+MC.simulate(nsteps=800,nfigs=10)
 print time.time()-start
