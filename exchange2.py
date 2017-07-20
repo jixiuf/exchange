@@ -27,25 +27,45 @@ class Square(object):
             if pos[0]==x and pos[1]==y:
                 return True
         return False
-
-    def get_x_begin(self):
-        return self.x_begin
-    def get_y_begin(self):
-        return self.y_begin
-    def set_x_begin(self,x):
-        self.x_begin=x
-    def set_y_begin(self,y):
-        self.y_begin=y
-    def get_x_end(self):
-        return self.x+self.len
-    def get_y_end(self):
-        return self.y+self.len
+    
+    def get_left_bottom(self):
+        return self.x_begin,self.y_begin
+    def get_right_bottom(self):
+        return self.x_begin+self.len-1,self.y_begin
+    def get_top_left(self):
+        return self.x_begin,self.y_begin+self.len-1
+    def get_top_right(self):
+        return self.x_begin+self.len+1,self.y_begin+self.len-1
+    def get_bottom_pos_list(self):
+        posList=[]
+        for x in range(self.len):
+            posList.append([self.x_begin+x,self.y_begin])
+        return posList
+    def get_left_pos_list(self):
+        posList=[]
+        for dy in range(self.len):
+            posList.append([self.x_begin,self.y_begin+dy])
+        return posList
+    def get_right_pos_list(self):
+        posList=[]
+        for dy in range(self.len):
+            posList.append([self.x_begin+self.len-1,self.y_begin+dy])
+        return posList
+    def get_top_pos_list(self):
+        posList=[]
+        for dx in range(self.len):
+            posList.append([self.x_begin+dx,self.y_begin+self.len-1])
+        return posList
+    # def set_self.x_begin(self,x):
+    #     self.x_begin=x
+    # def set_y_begin(self,y):
+    #     self.y_begin=y
     def get_pos_list(self):
         "返回4个位置"
         posList=[]
-        for x in range(len):
-            for y in range(len):
-                posList.append([x_begin+x,y_begin+y])
+        for x in range(self.len):
+            for y in range(self.len):
+                posList.append([self.x_begin+x,self.y_begin+y])
         return posList
 
 
@@ -64,7 +84,7 @@ class BinaryMC(object):
         self.nblocks = nblocks  # 需要红蓝格子的总数
         self.ratio = BAratio
         self.get_start()
-                
+
 
     def get_start(self):
         """
@@ -79,18 +99,20 @@ class BinaryMC(object):
         # print("nblocks,nsqrt,nmod,nblocks/nsqrt",nblocks,nsqrt,nmod,nblocks/nsqrt)
         self.xmiddle=ngrid/2
         self.ymiddle=0  #初始时， 尽量让各个格子围着（xmiddle,ymiddle） 这一点，寻找离这个点最近的点来放置下一个格子，
-        
+
 
         self.blocs = []
         for i in range(nblocks):
             if random.uniform(0,1) > ratio:
-                square=Square(1,x_begin,y_begin)
-                x_begin,y_begin=self.get_min_distance(square.len)
+                len=1
+                x_begin,y_begin=self.get_min_distance(len)
+                square=Square(len,x_begin,y_begin)
                 self.set_ground_by_pos(square,1)
                 self.blocs.append(square)
             else:
-                square=Square(2,x_begin,y_begin)
-                x_begin,y_begin=self.get_min_distance(square.len)
+                len=2
+                x_begin,y_begin=self.get_min_distance(len)
+                square=Square(len,x_begin,y_begin)
                 self.set_ground_by_pos(square,-1)
                 self.blocs.append(square)
 
@@ -126,14 +148,14 @@ class BinaryMC(object):
                             x_nearest=x_begin
                             y_nearest=y_begin
         return x_nearest,y_nearest
-    
+  
     def get_ground_y_len(self):
         return len(self.ground)
     def get_ground_x_len(self):
         return len(self.ground[0])
 
 
-    def is_enough_space_nearby(self,x,y,len): # len =1 或2 
+    def is_enough_space_nearby(self,x,y,len): # len =1 或2
         # 已知 (x,y) 为空格子，判断(x,y)附近是否为空，以足够容纳边长为len的正方形
         # 并返回这个足够容纳这个正方形的起点坐标
         if len==1:              # 边长为1时，直接返回这个点即可，因为忆知(x,y )为空格子
@@ -143,7 +165,7 @@ class BinaryMC(object):
         if x<=self.xmiddle: # 如果此点位于基点的左侧 (主要为了让选中的点离基点越近越好)
             is_enough,x_begin,y_begin=self.is_enough_space_nearby_left_bottom(x,y)
             if  is_enough: return  is_enough,x_begin,y_begin
-            is_enough,x_begin,y_begin=self.is_enough_space_nearby_left_top(x,y)
+            is_enough,x_begin,y_begin=self.is_enough_space_nearby_top_left(x,y)
             if  is_enough: return  is_enough,x_begin,y_begin
             is_enough,x_begin,y_begin=self.is_enough_space_nearby_right_bottom(x,y)
             if  is_enough: return  is_enough,x_begin,y_begin
@@ -157,10 +179,10 @@ class BinaryMC(object):
 
             is_enough,x_begin,y_begin=self.is_enough_space_nearby_left_bottom(x,y)
             if  is_enough: return  is_enough,x_begin,y_begin
-            is_enough,x_begin,y_begin=self.is_enough_space_nearby_left_top(x,y)
+            is_enough,x_begin,y_begin=self.is_enough_space_nearby_top_left(x,y)
             if  is_enough: return  is_enough,x_begin,y_begin
         return False,0,0
-    
+
     def get_distance(self,x1,y1,x2,y2):#计算两点之间的距离的平方 (x1,y1),(x2,y2 ) 则 （x2-x1）^2+(y2-y1)^2
         return (x1-x2)*(x1-x2)+(y1-y2)*(y1-y2)
     def is_enough_space_nearby_left_bottom(self,x,y): #
@@ -174,7 +196,7 @@ class BinaryMC(object):
         if a_is_empty and b_is_empty and c_is_empty:
             return True,x,y       # (x,y)点的位置
         return False,0,0
-    def is_enough_space_nearby_left_top(self,x,y): #
+    def is_enough_space_nearby_top_left(self,x,y): #
         # 以下为len=2的情形 ,如下图 判断 a bc 的位置是否同时为空格子
         # 并返回起点的坐标(4个点中坐标最小的那个)
         # |(x,y)    |c |
@@ -185,7 +207,7 @@ class BinaryMC(object):
         if a_is_empty and b_is_empty and c_is_empty:
             return True,x,y-1       # b点的位置
         return False,0,0
-    
+
     def is_enough_space_nearby_right_top(self,x,y): #
         # 以下为len=2的情形 ,如下图 判断 a bc 的位置是否同时为空格子
         # 并返回起点的坐标(4个点中坐标最小的那个)
@@ -209,7 +231,7 @@ class BinaryMC(object):
             return True,x-1,y       # b点的位置
         return False,0,0
 
-    
+
     def get_square_by_pos(self,x,y):
          # 判断xy 对应的坐标是否有对应的square, 否则话return None
         #  x,y 可以是大格子中4个点的任意一个点
@@ -223,13 +245,85 @@ class BinaryMC(object):
             for dx in range(square.len):
                 self.ground[square.y_begin+dy][square.x_begin+dx]=value
 
-    def random_direction(self): # 随机决定向4个文件哪个方便移动
-        return random.choice(["left","right","up","down"])
-    
-    # def move_left(self,nb):        # 向左移动， 移到头后从最右侧出现
-    #     square = self.blocs[nb]                      #get the location of the block
-    #     if square.len==1:                            # 如果是小格子
 
+    def is_empty(self,square): # 检测 ground 是否允许放置square
+        for pos in square.get_pos_list():
+            x=pos[0]
+            y=pos[1]
+            if self.ground[y][x]!=0:
+                return False
+        return True
+
+    def move_down_step(self,nb):        # 向下移动1部，
+        square = self.blocs[nb]                      #get the location of the block
+        old_value=self.ground[square.y_begin][square.x_begin]
+        if square.y_begin==0:                        # 到底部了
+            return False
+
+        self.set_ground_by_pos(square,0) # 将当前位置占据的ground 置空，以方便检测移动之后的新位置是否有足够的空位（新旧位置有可能有交叉，所以提前把旧位置致空）
+        x_new=square.x_begin
+        y_new=square.y_begin-1
+        square_new=Square(square.len,x_new,y_new)
+        if self.is_empty(square_new):
+            self.set_ground_by_pos(square_new,old_value)
+            self.blocs[nb] =square_new
+            return True     # move succ
+        else:
+            self.set_ground_by_pos(square,old_value) # reset to init value
+            return False
+    def move_down(self,nb):        # 向下移动， 如果下方有空间，一直向下移动，直到到底
+        while self.move_down_step(nb):
+            pass
+
+
+
+    def move_left(self,nb):        # 如果没有障碍物 向左移动1步， 移到头后从最右侧出现
+        if not self.move_left_step(nb): # 移动失败直接返回
+            return
+        #如果移动了一步，则检测下方有没有空间， 有就掉下去吧
+        self.move_down(nb)
+    def move_left_step(self,nb):        # 如果没有障碍物 向左移动1步， 移到头后从最右侧出现
+        square = self.blocs[nb]                      #get the location of the block
+        old_value=self.ground[square.y_begin][square.x_begin]
+
+        y_new=square.y_begin
+        x_new=square.x_begin-1
+        if square.x_begin==0:                        # 当在最左侧时
+            x_new=self.get_ground_x_len()-square.len
+        self.set_ground_by_pos(square,0) # 将当前位置占据的ground 置空，以方便检测移动之后的新位置是否有足够的空位（新旧位置有可能有交叉，所以提前把旧位置致空）
+        square_new=Square(square.len,x_new,y_new)
+        if self.is_empty(square_new):
+            self.set_ground_by_pos(square_new,old_value)
+            self.blocs[nb] =square_new
+            return True     # move succ
+        else:
+            self.set_ground_by_pos(square,old_value) # reset to init value
+            return False
+
+    def move_right(self,nb):        # 如果没有障碍物 向右移动1步， 移到头后从最左侧出现
+        if not self.move_right_step(nb): # 移动失败直接返回
+            return
+        #如果移动了一步，则检测下方有没有空间， 有就掉下去吧
+        self.move_down(nb)
+        
+    def move_right_step(self,nb):        # 如果没有障碍物 向右移动1步， 移到头后从最左侧出现
+        square = self.blocs[nb]                      #get the location of the block
+        old_value=self.ground[square.y_begin][square.x_begin]
+
+        y_new=square.y_begin
+        x_new=square.x_begin+1
+        x_right_bottom,y_right_bottom=square.get_right_bottom()
+        if x_right_bottom==self.get_ground_x_len()-1:                        # 当在最右侧时
+            x_new=0
+        self.set_ground_by_pos(square,0) # 将当前位置占据的ground 置空，以方便检测移动之后的新位置是否有足够的空位（新旧位置有可能有交叉，所以提前把旧位置致空）
+        square_new=Square(square.len,x_new,y_new)
+        if self.is_empty(square_new):
+            self.set_ground_by_pos(square_new,old_value)
+            self.blocs[nb] =square_new
+            return True     # move succ
+        else:
+            self.set_ground_by_pos(square,old_value) # reset to init value
+            return False
 
 
 
@@ -238,45 +332,57 @@ class BinaryMC(object):
     def move(self):
         nb = random.randint(0,self.nblocks-1)      #select a block
         square = self.blocs[nb]                      #get the location of the block
-        x=square.get_x_begin()
-        y=square.get_y_begin()
+        x=square.x_begin
+        y=square.y_begin
         # y, x = self.blocs[nb]                      #get the location of the block
         dx = random.choice([-1,0,0,1])             #select a direction along x
         if dx == 0:                                #select a direction along y
             dy = random.choice([-1,1])
         else:
             dy = 0
-        x1 = self.periodic(x,dx)
-        y1 = y+dy
 
-        #diffusion
-        if self.ground[y1][x1]==0 and dx!=0 and self.ground[y+1][x]==0:
-            #find the highest y at that x
-            while True:
-                if y1==0 or self.ground[y1-1][x1]!=0:
-                    break
-                else:
-                    y1 -= 1
-            #print self.Probability(x,y,x1,y1,dx), "diffusion"
-            if random.uniform(0,1)<=self.Probability(x,y,x1,y1,dx):
-                self.ground[y1][x1]=self.ground[y][x] #move the block
-                self.ground[y][x]=0
-                self.blocs[nb] = [y1,x1]        #update the block list
-        #exchange
-        elif self.ground[y1][x1]!=0 and y1>=0 and self.ground[y1][x1]!=self.ground[y][x]:
-            for i, val in enumerate(self.blocs):
-                if val == [y1,x1]:
-                    nb1 = i
-                    break
-            #print self.Probability(x,y,x1,y1,dx), "exchange"
-            if random.uniform(0,1)<=self.Probability(x,y,x1,y1,dx):
-                #if y!=y1:
-                #    print self.ground[y][x],self.ground[y1][x1]
-                temp = self.ground[y1][x1]
-                self.ground[y1][x1]=self.ground[y][x] #move the block
-                self.ground[y][x]=temp
-                self.blocs[nb] = [y1,x1]        #update the block list
-                self.blocs[nb1] = [y,x]
+        x1 = self.periodic(x,dx) # 这个x1,y1 跟真正移动到的位置还是有差别的，这个计算只是为了计算Probability
+        y1 = y+dy
+        if random.uniform(0,1)<=self.Probability(x,y,x1,y1,dx):
+            if dx==-1:
+                self.move_left(nb)
+            elif dx==1:
+                self.move_right(nb)
+            elif dy==-1:
+                self.move_down(nb)
+            else:                   # move up ,似乎无意义
+                pass
+
+
+
+        # #diffusion
+        # if self.ground[y1][x1]==0 and dx!=0 and self.ground[y+1][x]==0:
+        #     #find the highest y at that x
+        #     while True:
+        #         if y1==0 or self.ground[y1-1][x1]!=0:
+        #             break
+        #         else:
+        #             y1 -= 1
+        #     #print self.Probability(x,y,x1,y1,dx), "diffusion"
+        #     if random.uniform(0,1)<=self.Probability(x,y,x1,y1,dx):
+        #         self.ground[y1][x1]=self.ground[y][x] #move the block
+        #         self.ground[y][x]=0
+        #         self.blocs[nb] = [y1,x1]        #update the block list
+        # #exchange
+        # elif self.ground[y1][x1]!=0 and y1>=0 and self.ground[y1][x1]!=self.ground[y][x]:
+        #     for i, val in enumerate(self.blocs):
+        #         if val == [y1,x1]:
+        #             nb1 = i
+        #             break
+        #     #print self.Probability(x,y,x1,y1,dx), "exchange"
+        #     if random.uniform(0,1)<=self.Probability(x,y,x1,y1,dx):
+        #         #if y!=y1:
+        #         #    print self.ground[y][x],self.ground[y1][x1]
+        #         temp = self.ground[y1][x1]
+        #         self.ground[y1][x1]=self.ground[y][x] #move the block
+        #         self.ground[y][x]=temp
+        #         self.blocs[nb] = [y1,x1]        #update the block list
+        #         self.blocs[nb1] = [y,x]
 
 
     def periodic(self,x,dx):
@@ -415,8 +521,7 @@ param = {"EAA":0.12,   #A-A interaction
          "AlphaB":1.0,
          "AlphaC":0.2    #exchange coefficient
         }
-
 start = time.time()
 MC = BinaryMC(param=param,ngrid=50,nblocks=70,BAratio=0.3)
-MC.simulate(nsteps=800,nfigs=10)
+MC.simulate(nsteps=8000000,nfigs=10)
 print time.time()-start
